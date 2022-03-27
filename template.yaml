@@ -1,0 +1,88 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Deploys a Lambda function behind a HTTP API Gateway
+Globals: # https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-specification-template-anatomy-globals.html
+  Api:
+    EndpointConfiguration: REGIONAL
+    Cors: # https://awslabs.github.io/aws-lambda-powertools-python/latest/core/event_handler/api_gateway/#cors
+      AllowOrigin: "'*'"
+      AllowHeaders: "'Content-Type,Authorization,X-Amz-Date'"
+      MaxAge: "'300'"
+    #BinaryMediaTypes:                   # https://awslabs.github.io/aws-lambda-powertools-python/latest/core/event_handler/api_gateway/#binary-responses
+    #  - '*~1*'  # converts to */* for any binary type
+  Function:
+    Timeout: 5
+    MemorySize: 1024
+    Runtime: python3.9
+    #AutoPublishAlias: live # More info about Safe Deployments: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-deploymentpreference.html
+    #DeploymentPreference:
+    #  Type: Linear10PercentEvery1Minute
+    # Embed Lambda Powertools as a shared Layer
+    # See: https://awslabs.github.io/aws-lambda-powertools-python/latest/#lambda-layer
+    Layers: #
+      - !Sub arn:aws:lambda:eu-central-1:017000801446:layer:AWSLambdaPowertoolsPython:15
+    Environment:
+      Variables:
+        # Powertools env vars: https://awslabs.github.io/aws-lambda-powertools-python/#environment-variables
+        LOG_LEVEL: INFO
+        POWERTOOLS_LOGGER_SAMPLE_RATE: 0.1
+        POWERTOOLS_LOGGER_LOG_EVENT: true
+        POWERTOOLS_METRICS_NAMESPACE: samapigateway
+        POWERTOOLS_SERVICE_NAME: SamApiGatewayService
+
+Resources:
+  Function:
+    Type: AWS::Serverless::Function # More info about Function Resource: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-resource-function.html
+    Properties:
+      Handler: app.handler
+      CodeUri: "src/project"
+      Description: Lambda that does something
+      Events:
+        Info:
+          Type: HttpApi # More info about API Event Source: https://docs.aws.amazon.com/serverless-application-model/latest/developerguide/sam-property-function-api.html
+          Properties:
+            Path: /
+            Method: GET
+        Echo:
+          Type: HttpApi
+          Properties:
+            Path: /
+            Method: POST
+      Policies: # Example inline policy
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: "Allow"
+              Action:
+                - "s3:*"
+              Resource:
+                - "*"
+      Tags:
+        LambdaPowertools: python
+      #Environment:
+      #  Variables:
+      #    ENV_VAR_NAME: ENV_VAR_VALUE
+
+  # Sample policy to add additional permissions to your Lambda
+  # FunctionAdditionalPermission:
+  #     Type: "AWS::IAM::Policy"
+  #     Properties:
+  #         PolicyName: "root"
+  #         PolicyDocument:
+  #             Version: "2012-10-17"
+  #             Statement:
+  #                 -
+  #                     Effect: "Allow"
+  #                     Action: "ssm:GetParameters"
+  #                     Resource: "*"
+  #         Roles:
+  #             - !Ref FunctionRole # Sample policy to demonstrate Implicit IAM Role created with SAM
+
+Outputs:
+  ServerlessHttpApiGwURL:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${ServerlessHttpApi}.execute-api.${AWS::Region}.amazonaws.com/"
+
+  FunctionArn:
+    Description: "Function ARN"
+    Value: !GetAtt Function.Arn
